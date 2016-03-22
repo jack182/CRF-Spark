@@ -17,6 +17,8 @@
 
 package com.intel.ssg.bdt.nlp
 
+import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark.rdd.RDD
 
 case class CRFModel (
@@ -29,6 +31,13 @@ case class CRFModel (
   override def toString: String = {
     val dicString = dic.map{case(k, v) => k + "|-|" + v.toString}
     s"${head.mkString("\t")}|--|${dicString.mkString("\t")}|--|${alpha.mkString("\t")}"
+  }
+
+  def toArrayString: Array[String] = {
+    val dicString: Array[String] = dic.map{case(k, v) => k + "|-|" + v.toString}
+    val alphaString: Array[String] = alpha.map(_.toString)
+    val emptyLine: Array[String] = Array("|--|")
+    head ++ emptyLine ++ dicString ++ emptyLine ++ alphaString
   }
 
   /**
@@ -83,7 +92,7 @@ case class CRFModel (
 }
 
 object CRFModel {
-  def deSerializer(source: String): CRFModel = {
+  def load(source: String): CRFModel = {
     val components = source.split("""\|--\|""")
     require(components.length == 3, "Incompatible formats in Model file")
     val head = components(0).split("\t")
@@ -96,7 +105,36 @@ object CRFModel {
     CRFModel(head, dic, alpha)
   }
 
-  def serializer(model: CRFModel): String = {
+  def loadArray(source: Array[String]): CRFModel = {
+    val head = new ArrayBuffer[String]()
+    val dic = new ArrayBuffer[String]()
+    val alpha = new ArrayBuffer[String]()
+    var sentinel: Int = 0
+    for(line <- source) {
+      if(line == "|--|") {
+        sentinel += 1
+      }
+      else {
+        sentinel match {
+          case 0 => head.append(line)
+          case 1 => dic.append(line)
+          case 2 => alpha.append(line)
+          case _ => throw new RuntimeException("Incompatible formats in Model")
+        }
+      }
+    }
+    CRFModel(head.toArray, dic.toArray.map(x => {
+      val xx = x.split("""\|-\|""")
+      require(xx.length == 2, "Incompatible formats in Model file")
+      (xx(0), xx(1).toInt)
+    }), alpha.toArray.map(_.toDouble))
+  }
+
+  def save(model: CRFModel): String = {
     model.toString
+  }
+
+  def saveArray(model: CRFModel): Array[String] = {
+    model.toArrayString
   }
 }

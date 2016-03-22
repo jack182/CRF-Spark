@@ -37,8 +37,15 @@ object CRFFromParsedFile {
 
     val testRDD: RDD[Sequence] = sc.textFile(testFile).filter(_.nonEmpty).map(Sequence.deSerializer)
 
-    new java.io.PrintWriter("target/model") { write(CRFModel.serializer(model)); close() }
-    val modelFromFile = CRFModel.deSerializer(scala.io.Source.fromFile("target/model").getLines().toArray.head)
+    /* model save as String
+     *
+     * new java.io.PrintWriter("target/model") { write(CRFModel.save(model)); close() }
+     * val modelFromFile = CRFModel.load(scala.io.Source.fromFile("target/model").getLines().toArray.head)
+     */
+
+    // model save as RDD
+    sc.parallelize(CRFModel.saveArray(model)).saveAsTextFile("target/model")
+    val modelFromFile = CRFModel.loadArray(sc.textFile("target/model").collect())
 
     val results = modelFromFile.predict(testRDD)
     val score = results
