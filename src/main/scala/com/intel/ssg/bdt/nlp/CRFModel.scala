@@ -17,6 +17,8 @@
 
 package com.intel.ssg.bdt.nlp
 
+import java.io.{DataInputStream, FileInputStream, DataOutputStream, FileOutputStream}
+
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.rdd.RDD
@@ -30,14 +32,12 @@ case class CRFModel (
 
   override def toString: String = {
     val dicString = dic.map{case(k, v) => k + "|-|" + v.toString}
-    s"${head.mkString("\t")}|--|${dicString.mkString("\t")}|--|${alpha.mkString("\t")}"
+    s"${head.mkString("\t")}|--|${dicString.mkString("\t")}|--|${alpha.map(_.toFloat).mkString("\t")}"
   }
 
-  def toArrayString: Array[String] = {
+  def toStringHead: String = {
     val dicString: Array[String] = dic.map{case(k, v) => k + "|-|" + v.toString}
-    val alphaString: Array[String] = alpha.map(_.toString)
-    val emptyLine: Array[String] = Array("|--|")
-    head ++ emptyLine ++ dicString ++ emptyLine ++ alphaString
+    s"${head.mkString("\t")}|--|${dicString.mkString("\t")}"
   }
 
   /**
@@ -105,36 +105,35 @@ object CRFModel {
     CRFModel(head, dic, alpha)
   }
 
-  def loadArray(source: Array[String]): CRFModel = {
-    val head = new ArrayBuffer[String]()
-    val dic = new ArrayBuffer[String]()
-    val alpha = new ArrayBuffer[String]()
-    var sentinel: Int = 0
-    for(line <- source) {
-      if(line == "|--|") {
-        sentinel += 1
-      }
-      else {
-        sentinel match {
-          case 0 => head.append(line)
-          case 1 => dic.append(line)
-          case 2 => alpha.append(line)
-          case _ => throw new RuntimeException("Incompatible formats in Model")
-        }
-      }
-    }
-    CRFModel(head.toArray, dic.toArray.map(x => {
+  def loadBinaryFile(path: String): CRFModel = {
+    val source = scala.io.Source.fromFile(path + "/head").getLines().toArray.head
+    val components = source.split("""\|--\|""")
+    require(components.length == 2, "Incompatible formats in Model file")
+    val head = components(0).split("\t")
+    val dic = components(1).split("\t").map(x => {
       val xx = x.split("""\|-\|""")
       require(xx.length == 2, "Incompatible formats in Model file")
       (xx(0), xx(1).toInt)
-    }), alpha.toArray.map(_.toDouble))
+    })
+    val alpha = Array.fill(head(1).toInt)(0.0)
+    val infile = new FileInputStream(path + "/alpha")
+    val in: DataInputStream = new DataInputStream(infile)
+    for(i <- alpha.indices)
+      alpha(i) = in.readFloat()
+    infile.close()
+    CRFModel(head, dic, alpha)
   }
 
   def save(model: CRFModel): String = {
     model.toString
   }
 
-  def saveArray(model: CRFModel): Array[String] = {
-    model.toArrayString
+  def saveBinaryFile(model: CRFModel, path: String) = {
+    val head = model.toStringHead
+    new java.io.PrintWriter(path + "/head") { write(head); close() }
+    val outfile = new FileOutputStream(path + "/alpha")
+    val out: DataOutputStream = new DataOutputStream(outfile)
+    model.alpha.map(_.toFloat).foreach(out.writeFloat)
+    outfile.close()
   }
 }

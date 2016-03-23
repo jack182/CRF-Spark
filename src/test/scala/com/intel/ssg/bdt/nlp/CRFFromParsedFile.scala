@@ -17,6 +17,8 @@
 
 package com.intel.ssg.bdt.nlp
 
+import java.io.{DataOutputStream, DataInputStream, FileInputStream, FileOutputStream}
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -37,15 +39,13 @@ object CRFFromParsedFile {
 
     val testRDD: RDD[Sequence] = sc.textFile(testFile).filter(_.nonEmpty).map(Sequence.deSerializer)
 
-    /* model save as String
-     *
-     * new java.io.PrintWriter("target/model") { write(CRFModel.save(model)); close() }
-     * val modelFromFile = CRFModel.load(scala.io.Source.fromFile("target/model").getLines().toArray.head)
-     */
+//    model save as String
+//    new java.io.PrintWriter("target/model") { write(CRFModel.save(model)); close() }
+//    val modelFromFile = CRFModel.load(scala.io.Source.fromFile("target/model").getLines().toArray.head)
 
-    // model save as RDD
-    sc.parallelize(CRFModel.saveArray(model)).saveAsTextFile("target/model")
-    val modelFromFile = CRFModel.loadArray(sc.textFile("target/model").collect())
+    val path = "target/model"
+    CRFModel.saveBinaryFile(model, path)
+    val modelFromFile = CRFModel.loadBinaryFile(path)
 
     val results = modelFromFile.predict(testRDD)
     val score = results
