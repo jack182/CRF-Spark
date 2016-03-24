@@ -17,9 +17,8 @@
 
 package com.intel.ssg.bdt.nlp
 
-import java.io.{DataInputStream, FileInputStream, DataOutputStream, FileOutputStream}
-
-import scala.collection.mutable.ArrayBuffer
+import java.io._
+import java.nio.file.{StandardOpenOption, Paths, Files}
 
 import org.apache.spark.rdd.RDD
 
@@ -120,7 +119,7 @@ object CRFModel {
     val in: DataInputStream = new DataInputStream(infile)
     for(i <- alpha.indices)
       alpha(i) = in.readFloat()
-    infile.close()
+    in.close()
     CRFModel(head, dic, alpha)
   }
 
@@ -132,8 +131,16 @@ object CRFModel {
     val head = model.toStringHead
     new java.io.PrintWriter(path + "/head") { write(head); close() }
     val outfile = new FileOutputStream(path + "/alpha")
-    val out: DataOutputStream = new DataOutputStream(outfile)
-    model.alpha.map(_.toFloat).foreach(out.writeFloat)
-    outfile.close()
+    val out: DataOutputStream = new DataOutputStream(
+      new BufferedOutputStream(
+        Files.newOutputStream(
+          Paths.get(path + "/alpha"), StandardOpenOption.APPEND
+        )
+      )
+    )
+    val alpha = model.alpha.map(_.toFloat)
+    for(i <- alpha.indices)
+      out.writeFloat(alpha(i))
+    out.close()
   }
 }

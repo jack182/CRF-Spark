@@ -143,7 +143,8 @@ private class CostFun(
       Iterator(gradient.computeCRF(sentences, bcWeights.value))
     ).treeReduce((p1, p2) => (p1, p2) match {
       case ((expected1, obj1),(expected2, obj2)) =>
-        (expected1 + expected2, obj1 + obj2)}, treeDepth)
+//        (expected1 + expected2, obj1 + obj2)}, treeDepth)
+          (expected1 + expected2, obj1 + obj2)})
 
     updater match {
       case updater: L2Updater =>
