@@ -34,11 +34,9 @@ private[nlp] class FeatureIndex extends Serializable {
   val bigramTempls = new ArrayBuffer[String]()
   var labels = new ArrayBuffer[String]()
   val dic = mutable.HashMap[String, (Int, Int)]()
-  val kMaxContextSize = 8
-  val BOS = Array("_B-1", "_B-2", "_B-3", "_B-4",
-    "_B-5", "_B-6", "_B-7", "_B-8")
-  val EOS = Array("_B+1", "_B+2", "_B+3", "_B+4",
-    "_B+5", "_B+6", "_B+7", "_B+8")
+  val kMaxContextSize = 4
+  val BOS = Array("_B-1", "_B-2", "_B-3", "_B-4")
+  val EOS = Array("_B+1", "_B+2", "_B+3", "_B+4")
 
   def initAlpha() = {
     alpha = BDV.zeros[Double](maxID)
