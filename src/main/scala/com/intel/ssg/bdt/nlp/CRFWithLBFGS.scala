@@ -1,10 +1,8 @@
 package com.intel.ssg.bdt.nlp
 
 import scala.collection.mutable
-
-import breeze.optimize.{CachedDiffFunction, DiffFunction, LBFGS => BreezeLBFGS}
+import breeze.optimize.{CachedDiffFunction, DiffFunction, OWLQN => BreezeOWLQN, LBFGS => BreezeLBFGS}
 import breeze.linalg.{DenseVector => BDV, sum => Bsum}
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 import org.apache.spark.mllib.optimization._
@@ -71,7 +69,14 @@ object CRFWithLBFGS extends Logging {
 
     val costFun = new CostFun(data, gradient, updater, regParam)
 
-    val lbfgs = new BreezeLBFGS[BDV[Double]](maxNumIterations, numCorrections, convergenceTol)
+    var lbfgs: BreezeLBFGS[BDV[Double]] = null
+
+    updater match {
+      case updater: L1Updater =>
+        lbfgs = new BreezeOWLQN[Int, BDV[Double]](maxNumIterations, numCorrections, regParam, convergenceTol)
+      case updater: L2Updater =>
+        lbfgs = new BreezeLBFGS[BDV[Double]](maxNumIterations, numCorrections, convergenceTol)
+    }
 
     val states = lbfgs.iterations(new CachedDiffFunction[BDV[Double]](costFun), initialWeights)
 
@@ -82,8 +87,8 @@ object CRFWithLBFGS extends Logging {
       state = states.next()
     }
 
-//    logInfo("LBFGS.runLBFGS finished. last 10 losses: %s".format(
-//      lossHistory.result().takeRight(10).mkString(" -> ")))
+    logInfo("LBFGS.runLBFGS finished after %s iterations. last 10 losses: %s".format(
+      state.iter, lossHistory.result().takeRight(10).mkString(" -> ")))
     state.x
   }
 }
@@ -108,23 +113,35 @@ class CRFGradient extends Gradient {
   }
 }
 
-class L2Updater extends Updater {
+trait UpdaterCRF extends Updater {
   def compute(
       weightsOld: SparkVector,
       gradient: SparkVector,
       stepSize: Double,
       iter: Int,
-      regParam: Double): (SparkVector, Double) = {
+      regParam: Double) = {
     throw new Exception("The original compute() method is not supported")
   }
+  def computeCRF(weightsOld: BDV[Double], gradient: BDV[Double], regParam: Double): (BDV[Double], Double)
+}
 
+class L2Updater extends UpdaterCRF {
   def computeCRF(
       weightsOld: BDV[Double],
       gradient: BDV[Double],
-      regParam: Double): (BDV[Double], Double) ={
+      regParam: Double): (BDV[Double], Double) = {
     val loss = Bsum(weightsOld :* weightsOld :* regParam)
     gradient :+= weightsOld :* (regParam * 2.0)
     (gradient, loss)
+  }
+}
+
+class L1Updater extends UpdaterCRF {
+  def computeCRF(
+                  weightsOld: BDV[Double],
+                  gradient: BDV[Double],
+                  regParam: Double): (BDV[Double], Double) = {
+    (gradient, 0.0)
   }
 }
 
@@ -142,17 +159,12 @@ private class CostFun(
     val (expected, obj) = taggers.mapPartitions(sentences =>
       Iterator(gradient.computeCRF(sentences, bcWeights.value))
     ).treeReduce((p1, p2) => (p1, p2) match {
-      case ((expected1, obj1),(expected2, obj2)) =>
-//        (expected1 + expected2, obj1 + obj2)}, treeDepth)
-          (expected1 + expected2, obj1 + obj2)})
+      case ((expected1, obj1), (expected2, obj2)) =>
+        (expected1 + expected2, obj1 + obj2)
+    }, treeDepth)
 
-    updater match {
-      case updater: L2Updater =>
-        val (grad, loss) = updater.computeCRF(weigths, expected, regParam)
-        (obj + loss, grad)
-      case _ =>
-        throw new Exception("only support L2-CRF now")
-    }
+    val (grad, loss) = updater.asInstanceOf[UpdaterCRF].computeCRF(weigths, expected, regParam)
+    (obj + loss, grad)
   }
 }
 

@@ -17,21 +17,29 @@
 
 package com.intel.ssg.bdt.nlp
 
+import breeze.linalg.DenseVector
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 
+trait Regularization
+
+case object L1 extends Regularization
+
+case object L2 extends Regularization
+
 /**
  * CRF with support for multiple parallel runs
- * regParam = 1/(2.0 * sigma**2)
+ * L2 regParam = 1/(2.0 * sigma**2)
  */
 class CRF private (
     private var freq: Int,
     private var regParam: Double,
     private var maxIterations: Int,
-    private var tolerance: Double) extends Serializable with Logging {
+    private var tolerance: Double,
+    private var regularization: Regularization) extends Serializable with Logging {
 
-  def this() = this(freq = 1, regParam = 0.5, maxIterations = 1000, tolerance = 1E-3)
+  def this() = this(freq = 1, regParam = 0.5, maxIterations = 1000, tolerance = 1E-3, regularization = L2)
 
   def setRegParam(regParam: Double) = {
     this.regParam = regParam
@@ -50,6 +58,11 @@ class CRF private (
 
   def setEta(eta: Double) = {
     this.tolerance = eta
+    this
+  }
+
+  def setRegularization(regula: Regularization) = {
+    this.regularization = regula
     this
   }
 
@@ -91,18 +104,27 @@ class CRF private (
    * @param featureIdx the index of the feature
    */
   def runAlgorithm(
-    taggers: RDD[Tagger],
-    featureIdx: FeatureIndex): CRFModel = {
+      taggers: RDD[Tagger],
+      featureIdx: FeatureIndex): CRFModel = {
 
-    logInfo("Starting CRFWithLBFGS Iterations ( sentences: %d, features: %d, labels: %d )"
+    logInfo("Starting CRF Iterations ( sentences: %d, features: %d, labels: %d )"
       .format(taggers.count(), featureIdx.maxID, featureIdx.labels.length))
 
-    // L2 regularization (TODO: add L1 support)
-    val crfLbfgs = new CRFWithLBFGS(new CRFGradient, new L2Updater)
+    var updater: UpdaterCRF = null
+    regularization match {
+      case L1 =>
+        updater = new L1Updater
+      case L2 =>
+        updater = new L2Updater
+      case _ =>
+        throw new Exception("only support L1-CRF and L2-CRF now")
+    }
+
+    featureIdx.alpha = new CRFWithLBFGS(new CRFGradient, updater)
       .setRegParam(regParam)
       .setConvergenceTol(tolerance)
-
-    featureIdx.alpha = crfLbfgs.optimizer(taggers, featureIdx.initAlpha())
+      .setNumIterations(maxIterations)
+      .optimizer(taggers, featureIdx.initAlpha())
 
     featureIdx.saveModel
   }
@@ -120,41 +142,68 @@ object CRF {
    * @param train Source files for training the model
    * @return Model
    */
+
   def train(
-    templates: Array[String],
-    train: RDD[Sequence],
-    regParam: Double,
-    freq: Int,
-    maxIterion: Int,
-    eta: Double): CRFModel = {
+      templates: Array[String],
+      train: RDD[Sequence],
+      regParam: Double,
+      freq: Int,
+      maxIteration: Int,
+      eta: Double,
+      regularization: Regularization): CRFModel = {
     new CRF().setRegParam(regParam)
       .setFreq(freq)
-      .setMaxIterations(maxIterion)
+      .setMaxIterations(maxIteration)
+      .setEta(eta)
+      .setRegularization(regularization)
+      .runCRF(templates, train)
+  }
+
+  def train(
+      templates: Array[String],
+      train: RDD[Sequence],
+      regParam: Double,
+      freq: Int,
+      maxIteration: Int,
+      eta: Double): CRFModel = {
+    new CRF().setRegParam(regParam)
+      .setFreq(freq)
+      .setMaxIterations(maxIteration)
       .setEta(eta)
       .runCRF(templates, train)
   }
 
   def train(
-             templates: Array[String],
-             train: RDD[Sequence],
-             regParam: Double,
-             freq: Int): CRFModel = {
+      templates: Array[String],
+      train: RDD[Sequence],
+      regParam: Double,
+      freq: Int): CRFModel = {
     new CRF().setRegParam(regParam)
       .setFreq(freq)
       .runCRF(templates, train)
   }
 
   def train(
-    templates: Array[String],
-    train: RDD[Sequence],
-    regParam: Double): CRFModel = {
+      templates: Array[String],
+      train: RDD[Sequence],
+      regParam: Double,
+      regularization: Regularization): CRFModel = {
     new CRF().setRegParam(regParam)
+      .setRegularization(regularization)
       .runCRF(templates, train)
   }
 
   def train(
-    templates: Array[String],
-    train: RDD[Sequence]): CRFModel = {
+      templates: Array[String],
+      train: RDD[Sequence],
+      regularization: Regularization): CRFModel = {
+    new CRF().setRegularization(regularization)
+      .runCRF(templates, train)
+  }
+
+  def train(
+      templates: Array[String],
+      train: RDD[Sequence]): CRFModel = {
     new CRF().runCRF(templates, train)
   }
 }

@@ -35,27 +35,30 @@ object CRFFromParsedFile {
     val templates: Array[String] = scala.io.Source.fromFile(templateFile).getLines().filter(_.nonEmpty).toArray
     val trainRDD: RDD[Sequence] = sc.textFile(trainFile).filter(_.nonEmpty).map(Sequence.deSerializer)
 
-    val model: CRFModel = CRF.train(templates, trainRDD, 0.25, 2)
+    val model: CRFModel = CRF.train(templates, trainRDD, 0.25, 1, 100, 1E-3, L1)
 
     val testRDD: RDD[Sequence] = sc.textFile(testFile).filter(_.nonEmpty).map(Sequence.deSerializer)
 
+    /**
+      * an example of model saving and loading
+      */
     new java.io.File("target/model").mkdir()
     //model save as String
     new java.io.PrintWriter("target/model/model1") { write(CRFModel.save(model)); close() }
     val modelFromFile1 = CRFModel.load(scala.io.Source.fromFile("target/model/model1").getLines().toArray.head)
-
     // model save as RDD
     sc.parallelize(CRFModel.saveArray(model)).saveAsTextFile("target/model/model2")
     val modelFromFile2 = CRFModel.loadArray(sc.textFile("target/model/model2").collect())
-
-    //model save as BinaryFile
+    // model save as BinaryFile
     val path = "target/model/model3"
     new java.io.File(path).mkdir()
     CRFModel.saveBinaryFile(model, path)
     val modelFromFile3 = CRFModel.loadBinaryFile(path)
 
-
-    val results = modelFromFile3.predict(testRDD)
+    /**
+      * still use the model in memory to predict
+      */
+    val results = model.predict(testRDD)
     val score = results
       .zipWithIndex()
       .map(_.swap)
