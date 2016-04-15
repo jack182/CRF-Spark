@@ -23,6 +23,12 @@ import java.nio.file.{StandardOpenOption, Paths, Files}
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.rdd.RDD
 
+private[nlp] trait VerboseMode
+
+private[nlp] case object FineMode extends VerboseMode
+
+private[nlp] case object CoarseMode extends VerboseMode
+
 case class CRFModel (
     head: Array[String],
     dic: Array[(String, Int)],
@@ -77,6 +83,33 @@ case class CRFModel (
     predict(tests, 1.0)
   }
 
+  def predict(
+    tests: RDD[Sequence],
+    costFactor: Double, mode: VerboseMode): RDD[Sequence] = {
+    val bcModel = tests.context.broadcast(this)
+    tests.map { test =>
+      bcModel.value.testCRF(test, costFactor, mode)
+    }
+  }
+
+  def predict(
+    tests: Array[Sequence],
+    costFactor: Double, mode: VerboseMode): Array[Sequence] = {
+    tests.map(this.testCRF(_, costFactor, mode))
+  }
+
+  def predict(
+    tests: RDD[Sequence],
+    mode: VerboseMode): RDD[Sequence] = {
+    predict(tests, 1.0, mode)
+  }
+
+  def predict(
+    tests: Array[Sequence],
+    mode: VerboseMode): Array[Sequence] = {
+    predict(tests, 1.0, mode)
+  }
+
   /**
     * Internal method to test the CRF model
     *
@@ -91,10 +124,43 @@ case class CRFModel (
     tagger.setCostFactor(costFactor)
     tagger.read(test, deFeatureIdx)
     deFeatureIdx.buildFeatures(tagger)
-    tagger.parse(deFeatureIdx.alpha)
+    tagger.parse(deFeatureIdx.alpha, null)
     Sequence(test.toArray.map(x =>
       Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
     ))
+  }
+
+  /**
+    * Internal method to test the CRF model
+    *
+    * @param test the sequence to be tested
+    * @return the sequence along with predictive labels
+    */
+  def testCRF(test: Sequence,
+              costFactor: Double, mode: VerboseMode): Sequence = {
+    val deFeatureIdx = new FeatureIndex()
+    deFeatureIdx.readModel(this)
+    val tagger = new Tagger(deFeatureIdx.labels.size, TestMode)
+    tagger.setCostFactor(costFactor)
+    tagger.read(test, deFeatureIdx)
+    deFeatureIdx.buildFeatures(tagger)
+    tagger.parse(deFeatureIdx.alpha, mode)
+    val tokens = new ArrayBuffer[Token] ()
+    val labels = deFeatureIdx.labels
+    val tmp = test.toArray
+    for( i <- tmp.indices) {
+      val probMat = new ArrayBuffer[(String, Double)]()
+      mode match {
+        case CoarseMode =>
+          probMat.append((labels(tagger.result(i)), tagger.probMatrix(i * labels.length + tagger.result(i))))
+        case FineMode =>
+          for( j <- labels.indices)
+            probMat.append((labels(j), tagger.probMatrix(i * labels.length + j)))
+      }
+      tokens.append(Token.put(labels(tagger.result(i)), tmp(i).tags).setProb(probMat.toArray))
+    }
+    //println( Sequence.probSerializer(Sequence(tokens.toArray).setSeqProb(tagger.seqProb)) )
+    Sequence(tokens.toArray).setSeqProb(tagger.seqProb)
   }
 }
 

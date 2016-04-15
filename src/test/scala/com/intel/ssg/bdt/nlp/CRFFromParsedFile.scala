@@ -29,7 +29,7 @@ object CRFFromParsedFile {
     val trainFile = "src/test/resources/chunking/serialized/train.data"
     val testFile = "src/test/resources/chunking/serialized/test.data"
 
-    val conf = new SparkConf().setAppName(s"${this.getClass.getSimpleName}")
+    val conf = new SparkConf().setAppName(s"${this.getClass.getSimpleName}").setMaster("local[2]")
     val sc = new SparkContext(conf)
 
     val templates: Array[String] = scala.io.Source.fromFile(templateFile).getLines().filter(_.nonEmpty).toArray
@@ -58,7 +58,7 @@ object CRFFromParsedFile {
     /**
       * still use the model in memory to predict
       */
-    val results = model.predict(testRDD)
+    val results = model.predict(testRDD,  FineMode)
     val score = results
       .zipWithIndex()
       .map(_.swap)
