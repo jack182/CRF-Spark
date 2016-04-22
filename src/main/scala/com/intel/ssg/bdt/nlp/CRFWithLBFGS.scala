@@ -95,10 +95,10 @@ object CRFWithLBFGS extends Logging {
 
 class CRFGradient extends Gradient {
   def compute(
-     data: SparkVector,
-     label: Double,
-     weights: SparkVector,
-     cumGradient: SparkVector): Double = {
+      data: SparkVector,
+      label: Double,
+      weights: SparkVector,
+      cumGradient: SparkVector): Double = {
     throw new Exception("The original compute() method is not supported")
   }
 
