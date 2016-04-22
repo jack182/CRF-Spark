@@ -23,12 +23,20 @@ import java.nio.file.{StandardOpenOption, Paths, Files}
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.rdd.RDD
 
+trait VerboseMode
+
+case object VerboseLevel1 extends VerboseMode
+
+case object VerboseLevel2 extends VerboseMode
+
 case class CRFModel (
     head: Array[String],
     dic: Array[(String, Int)],
     alpha: Array[Double]) extends Serializable {
 
   protected def formatVersion = "1.0"
+
+  private var verboseMode: Option[VerboseMode] = None
 
   override def toString: String = {
     val dicString = dic.map{case(k, v) => k + "|-|" + v.toString}
@@ -55,18 +63,18 @@ case class CRFModel (
     * @return Source files with the predictive labels
     */
   def predict(
-    tests: RDD[Sequence],
-    costFactor: Double): RDD[Sequence] = {
-      val bcModel = tests.context.broadcast(this)
-      tests.map { test =>
-        bcModel.value.testCRF(test, costFactor)
-      }
+      tests: RDD[Sequence],
+      costFactor: Double): RDD[Sequence] = {
+    val bcModel = tests.context.broadcast(this)
+    tests.map { test =>
+      bcModel.value.testCRF(test, costFactor, verboseMode)
+    }
   }
 
   def predict(
-    tests: Array[Sequence],
-    costFactor: Double): Array[Sequence] = {
-    tests.map(this.testCRF(_, costFactor))
+      tests: Array[Sequence],
+      costFactor: Double): Array[Sequence] = {
+    tests.map(this.testCRF(_, costFactor, verboseMode))
   }
 
   def predict(tests: RDD[Sequence]): RDD[Sequence] = {
@@ -77,6 +85,36 @@ case class CRFModel (
     predict(tests, 1.0)
   }
 
+  def predict(
+    tests: RDD[Sequence],
+    costFactor: Double,
+    mode: VerboseMode): RDD[Sequence] = {
+    verboseMode = Some(mode)
+    predict(tests, costFactor)
+  }
+
+  def predict(
+    tests: Array[Sequence],
+    costFactor: Double,
+    mode: VerboseMode): Array[Sequence] = {
+    verboseMode = Some(mode)
+    predict(tests, costFactor)
+  }
+
+  def predict(
+    tests: RDD[Sequence],
+    mode: VerboseMode): RDD[Sequence] = {
+    verboseMode = Some(mode)
+    predict(tests, 1.0)
+  }
+
+  def predict(
+    tests: Array[Sequence],
+    mode: VerboseMode): Array[Sequence] = {
+    verboseMode = Some(mode)
+    predict(tests, 1.0)
+  }
+
   /**
     * Internal method to test the CRF model
     *
@@ -84,17 +122,37 @@ case class CRFModel (
     * @return the sequence along with predictive labels
     */
   def testCRF(test: Sequence,
-              costFactor: Double): Sequence = {
+              costFactor: Double, vMode: Option[VerboseMode]): Sequence = {
     val deFeatureIdx = new FeatureIndex()
     deFeatureIdx.readModel(this)
     val tagger = new Tagger(deFeatureIdx.labels.size, TestMode)
     tagger.setCostFactor(costFactor)
     tagger.read(test, deFeatureIdx)
     deFeatureIdx.buildFeatures(tagger)
-    tagger.parse(deFeatureIdx.alpha)
-    Sequence(test.toArray.map(x =>
-      Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
-    ))
+    tagger.parse(deFeatureIdx.alpha, vMode)
+    if (vMode.isDefined) {
+      val tokens = new ArrayBuffer[Token]()
+      val labels = deFeatureIdx.labels
+      val tmp = test.toArray
+      for (i <- tmp.indices) {
+        val probMat = new ArrayBuffer[(String, Double)]()
+        vMode match {
+          case Some(VerboseLevel1) =>
+            probMat.append((labels(tagger.result(i)), tagger.probMatrix(i * labels.length + tagger.result(i))))
+          case Some(VerboseLevel2) =>
+            for (j <- labels.indices)
+              probMat.append((labels(j), tagger.probMatrix(i * labels.length + j)))
+          case _ =>
+        }
+        tokens.append(Token.put(labels(tagger.result(i)), tmp(i).tags).setProb(probMat.toArray))
+      }
+      Sequence(tokens.toArray).setSeqProb(tagger.seqProb)
+    }
+    else {
+      Sequence(test.toArray.map(x =>
+        Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
+      ))
+    }
   }
 }
 

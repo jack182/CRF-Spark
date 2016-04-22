@@ -21,6 +21,8 @@ import scala.collection.mutable.ArrayBuffer
 
 import breeze.linalg.{DenseVector => BDV, Vector => BV}
 
+import breeze.numerics.pow
+
 private[nlp] trait Mode
 
 private[nlp] case object LearnMode extends Mode
@@ -41,7 +43,8 @@ private[nlp] class Tagger (
   val result = new ArrayBuffer[Int]()
   val featureCache = new ArrayBuffer[Int]()
   val featureCacheIndex = new ArrayBuffer[Int]()
-
+  val probMatrix = new ArrayBuffer[Double]()
+  var seqProb = 0.0
 
   def setCostFactor(costFactor: Double) = {
     this.costFactor = costFactor
@@ -176,6 +179,16 @@ private[nlp] class Tagger (
     Z - s
   }
 
+  def probCalculate(): Unit ={
+    probMatrix  ++= Array.fill(x.length * ySize)(0.0)
+    var idx :Int = 0
+    nodes.foreach{ n =>
+      idx = n.x * ySize + n.y
+      probMatrix(idx) = Math.exp(n.alpha + n.beta - n.cost - Z)
+    }
+    this.seqProb = Math.exp(-cost -Z )
+
+  }
   def clear(): Unit = {
     nodes.foreach(clear)
     nodes.clear()
@@ -186,12 +199,15 @@ private[nlp] class Tagger (
     node.rPath.clear()
   }
 
-  def parse(alpha: BDV[Double]): Unit = {
+  def parse(alpha: BDV[Double], mode: Option[VerboseMode]): Unit = {
     buildLattice(alpha)
-    if (nBest != 0) {
+    if (nBest != 0 || mode.isDefined) {
       forwardBackward()
+      viterbi()
+      probCalculate()
     }   // (TODO: add nBest support)
-    viterbi()
+    else
+      viterbi()
   }
 
   def buildLattice(alpha: BDV[Double]): Unit = {
