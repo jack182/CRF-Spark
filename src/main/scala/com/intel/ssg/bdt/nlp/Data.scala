@@ -70,6 +70,7 @@ object Token {
     }.mkString("\t") )
     strRes.toString
   }
+
   def put(label: String, tags: Array[String]) = {
     new Token(label, tags)
   }
@@ -85,7 +86,7 @@ object Token {
   * @param sequence List of tokens
   */
 case class Sequence (sequence: Array[Token]) extends Serializable {
-  var seqProb : Double= 0.0
+  var seqProb = 0.0
 
   def setSeqProb(seqProb: Double): Sequence ={
     this.seqProb = seqProb

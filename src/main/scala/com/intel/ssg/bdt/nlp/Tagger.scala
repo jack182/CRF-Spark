@@ -199,9 +199,9 @@ private[nlp] class Tagger (
     node.rPath.clear()
   }
 
-  def parse(alpha: BDV[Double], mode: VerboseMode): Unit = {
+  def parse(alpha: BDV[Double], mode: Option[VerboseMode]): Unit = {
     buildLattice(alpha)
-    if (nBest != 0 || mode!= null) {
+    if (nBest != 0 || mode.isDefined) {
       forwardBackward()
       viterbi()
       probCalculate()
