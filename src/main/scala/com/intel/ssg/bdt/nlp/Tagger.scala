@@ -17,6 +17,7 @@
 
 package com.intel.ssg.bdt.nlp
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import breeze.linalg.{DenseVector => BDV, Vector => BV}
@@ -29,10 +30,21 @@ private[nlp] case object LearnMode extends Mode
 
 private[nlp] case object TestMode extends Mode
 
+private [nlp] case class QueueElement(
+  node : Node,
+  fx : Double,
+  gx : Double,
+  next : QueueElement )
+  extends Serializable {
+    def compare(other: QueueElement): Boolean = {
+    return this.fx > other.fx
+  }
+}
+
 private[nlp] class Tagger (
     ySize: Int,
     mode: Mode) extends Serializable {
-  var nBest = 0
+  var nBest = 5
   var cost = 0.0
   var Z = 0.0
   var obj = 0.0
@@ -45,6 +57,9 @@ private[nlp] class Tagger (
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
+  var agenda = new mutable.PriorityQueue[QueueElement]() (
+    Ordering.by((_:QueueElement).fx).reverse
+  )
 
   def setCostFactor(costFactor: Double) = {
     this.costFactor = costFactor
@@ -208,6 +223,11 @@ private[nlp] class Tagger (
     }   // (TODO: add nBest support)
     else
       viterbi()
+    if(nBest >= 1) {
+      val topN = new ArrayBuffer[ArrayBuffer[Int]]()
+      initNbest()
+      topN ++= findNBest()
+    }
   }
 
   def buildLattice(alpha: BDV[Double]): Unit = {
@@ -248,4 +268,62 @@ private[nlp] class Tagger (
 
     p
   }
+
+  def initNbest(): Boolean = {
+    val k = x.size - 1
+    var node: Node = null
+    var fx = 0.0
+    var gx = 0.0
+    val next: QueueElement = null
+    if(!agenda.isEmpty)
+      agenda.clear()
+    for(i <- 0 until ySize) {
+      node = this.nodes(k*ySize + i)
+      fx = -node.bestCost
+      gx = -node.cost
+      agenda += QueueElement(node, fx, gx, next)
+    }
+    return true
+  }
+  def next(): Boolean = {
+    var top: QueueElement = null
+    var rnode: Node = null
+    while(! agenda.isEmpty) {
+//      top = agenda.head
+//      agenda = agenda.tail
+      top = agenda.dequeue()
+      rnode = top.node
+      if(rnode.x == 0) {
+        var n: QueueElement = top
+        for(i <- 0 until x.size) {
+          result.append(n.node.y)
+          n = n.next
+        }
+        cost = top.gx
+        return true
+      }
+      var gx = 0.0
+      var fx: Double = 0.0
+      rnode.lPath.foreach { p =>
+        gx = -nodes(p.lNode).cost - p.cost + top.gx
+        fx = - nodes(p.lNode).bestCost - p.cost + top.gx
+        agenda  += QueueElement(nodes(p.lNode), fx, gx, top)
+      }
+    }
+    return false
+  }
+  def findNBest(): ArrayBuffer[ArrayBuffer[Int]] = {
+    val topN = new ArrayBuffer[ArrayBuffer[Int]]()
+    val prob = new ArrayBuffer[Double]()
+    for(i <- 0 until this.nBest) {
+      result.clear()
+      if(! next())
+        return topN
+      prob.append(Math.exp(-cost - Z))
+      topN.append(result)
+    }
+    prob
+    topN
+  }
+
 }
