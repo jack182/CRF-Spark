@@ -10,7 +10,8 @@ This documentation is for Spark 1.4+. Other version will probably work yet not t
 * Training in parallel based on Spark RDD
 * Support a simple format of training and test file. Any other format also can be read by a simple tokenizer.
 * A common feature templates design, which is also used in other machine learning tools, such as [CRF++](https://taku910.github.io/crfpp/) and [miralium](https://code.google.com/archive/p/miralium/)
-* Fast training based on LBFGS, a quasi-newton algorithm for large scale numerical optimization problem
+* Fast training based on Limited-memory BFGS optimizaton algorithm (fitting L2-regularized models) or Orthant-wise Limited Memory Quasi-Newton optimizaton algorithm (fitting L1-regularized models)
+* Support two verbose levels to provide extra information. VerboseLevel1 shows marginal probabilities for each tag and a conditional probability for the entire output; VerboseLevel2 shows marginal probabilities for all other candidates additionally.
 * Linear-chain (first-order Markov) CRF
 * Test can run both in parallel and in serial
 
