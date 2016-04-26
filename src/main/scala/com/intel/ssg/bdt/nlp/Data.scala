@@ -88,9 +88,45 @@ object Token {
 case class Sequence (sequence: Array[Token]) extends Serializable {
   var seqProb = 0.0
 
+  var candidates: ArrayBuffer[ArrayBuffer[Int]] = null
+  var probN: ArrayBuffer[Double] = null
+  var labels: ArrayBuffer[String] = null
+
+  def setLabels(labels: ArrayBuffer[String]): Sequence = {
+    this.labels = labels
+    this
+  }
+
   def setSeqProb(seqProb: Double): Sequence ={
     this.seqProb = seqProb
     this
+  }
+
+  def setCandidates(nBest: ArrayBuffer[ArrayBuffer[Int]]): Sequence = {
+    this.candidates = nBest
+    this
+  }
+
+  def setProbN(probN: ArrayBuffer[Double]):Sequence = {
+    this.probN = probN
+    this
+  }
+
+  def showNthBest( k: Int): String = {
+    val strRes = new ArrayBuffer[String]()
+    strRes.append("#" + k + "\t" +this.probN(k).toString)
+
+    val pairs = this.candidates(k).zip(this.toArray)
+    for((t, token) <- pairs) {
+      strRes.append(token.tags.mkString("\t") + "\t" + labels(t))
+    }
+    strRes.mkString("\n")
+  }
+
+  def showAll(): String = {
+    val idx = candidates.indices
+    idx.map(t =>showNthBest(t))
+                               .mkString("\n")
   }
 
   override def toString: String = {
@@ -100,7 +136,7 @@ case class Sequence (sequence: Array[Token]) extends Serializable {
   def toArray: Array[Token] = sequence
 
   def compare(other: Sequence): Int = {
-    this.toArray.zip(other.toArray).map{case(one, other) => one.compare(other)}.sum
+    this.toArray.zip(other.toArray).map{case(one, two) => one.compare(two)}.sum
   }
 }
 
