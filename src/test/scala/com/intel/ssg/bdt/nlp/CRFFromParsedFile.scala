@@ -29,7 +29,7 @@ object CRFFromParsedFile {
     val trainFile = "src/test/resources/chunking/serialized/train.data"
     val testFile = "src/test/resources/chunking/serialized/test.data"
 
-    val conf = new SparkConf().setAppName(s"${this.getClass.getSimpleName}").setMaster("local[2]")
+    val conf = new SparkConf().setAppName(s"${this.getClass.getSimpleName}")
     val sc = new SparkContext(conf)
 
     val templates: Array[String] = scala.io.Source.fromFile(templateFile).getLines().filter(_.nonEmpty).toArray
@@ -42,18 +42,18 @@ object CRFFromParsedFile {
     /**
       * an example of model saving and loading
       */
-//    new java.io.File("target/model").mkdir()
-//    //model save as String
-//    new java.io.PrintWriter("target/model/model1") { write(CRFModel.save(model)); close() }
-//    val modelFromFile1 = CRFModel.load(scala.io.Source.fromFile("target/model/model1").getLines().toArray.head)
-//    // model save as RDD
-//    sc.parallelize(CRFModel.saveArray(model)).saveAsTextFile("target/model/model2")
-//    val modelFromFile2 = CRFModel.loadArray(sc.textFile("target/model/model2").collect())
-//    // model save as BinaryFile
-//    val path = "target/model/model3"
-//    new java.io.File(path).mkdir()
-//    CRFModel.saveBinaryFile(model, path)
-//    val modelFromFile3 = CRFModel.loadBinaryFile(path)
+    new java.io.File("target/model").mkdir()
+    //model save as String
+    new java.io.PrintWriter("target/model/model1") { write(CRFModel.save(model)); close() }
+    val modelFromFile1 = CRFModel.load(scala.io.Source.fromFile("target/model/model1").getLines().toArray.head)
+    // model save as RDD
+    sc.parallelize(CRFModel.saveArray(model)).saveAsTextFile("target/model/model2")
+    val modelFromFile2 = CRFModel.loadArray(sc.textFile("target/model/model2").collect())
+    // model save as BinaryFile
+    val path = "target/model/model3"
+    new java.io.File(path).mkdir()
+    CRFModel.saveBinaryFile(model, path)
+    val modelFromFile3 = CRFModel.loadBinaryFile(path)
 
     /**
       * still use the model in memory to predict
