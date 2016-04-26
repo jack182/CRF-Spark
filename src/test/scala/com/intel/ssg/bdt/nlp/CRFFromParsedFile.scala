@@ -58,7 +58,10 @@ object CRFFromParsedFile {
     /**
       * still use the model in memory to predict
       */
-    val results = model.predict(testRDD,  VerboseLevel1)
+    val results = model.setNBest(10)
+      .setVerboseMode(VerboseLevel1)
+      .predict(testRDD)
+
     val score = results
       .zipWithIndex()
       .map(_.swap)

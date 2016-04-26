@@ -36,15 +36,15 @@ private [nlp] case class QueueElement(
   gx : Double,
   next : QueueElement )
   extends Serializable {
-    def compare(other: QueueElement): Boolean = {
-    return this.fx > other.fx
-  }
+  //    def compare(other: QueueElement): Boolean = {
+  //    return this.fx > other.fx
+//}
 }
 
 private[nlp] class Tagger (
     ySize: Int,
     mode: Mode) extends Serializable {
-  var nBest = 5
+  var nBest = 0
   var cost = 0.0
   var Z = 0.0
   var obj = 0.0
@@ -57,6 +57,8 @@ private[nlp] class Tagger (
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
+  val topN = new ArrayBuffer[ArrayBuffer[Int]]()
+  val probN = new ArrayBuffer[Double]()
   var agenda = new mutable.PriorityQueue[QueueElement]() (
     Ordering.by((_:QueueElement).fx).reverse
   )
@@ -66,6 +68,10 @@ private[nlp] class Tagger (
     this
   }
 
+  def setNBest(k: Int) = {
+    this.nBest = k
+    this
+  }
   def read(lines: Sequence, feature_idx: FeatureIndex): Unit = {
     lines.toArray.foreach{ t =>
       mode match {
@@ -220,13 +226,12 @@ private[nlp] class Tagger (
       forwardBackward()
       viterbi()
       probCalculate()
-    }   // (TODO: add nBest support)
+    }
     else
       viterbi()
     if(nBest >= 1) {
-      val topN = new ArrayBuffer[ArrayBuffer[Int]]()
       initNbest()
-      topN ++= findNBest()
+      findNBest()
     }
   }
 
@@ -312,18 +317,17 @@ private[nlp] class Tagger (
     }
     return false
   }
-  def findNBest(): ArrayBuffer[ArrayBuffer[Int]] = {
-    val topN = new ArrayBuffer[ArrayBuffer[Int]]()
-    val prob = new ArrayBuffer[Double]()
-    for(i <- 0 until this.nBest) {
+  def findNBest(){
+       for(i <- 0 until this.nBest) {
       result.clear()
       if(! next())
-        return topN
-      prob.append(Math.exp(-cost - Z))
-      topN.append(result)
+        return
+      val tmp = new ArrayBuffer[Int]()
+      tmp ++= result
+      this.probN.append(Math.exp(-cost - Z))
+      this.topN.append(tmp)
     }
-    prob
-    topN
+
   }
 
 }
