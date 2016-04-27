@@ -48,14 +48,14 @@ private[nlp] class Tagger (
   val nodes  = new ArrayBuffer[Node]()
   val answer = new ArrayBuffer[Int]()
   val result = new ArrayBuffer[Int]()
-  val topNResult = new ArrayBuffer[Int]()
+  lazy val topNResult = ArrayBuffer.empty[Int]
   val featureCache = new ArrayBuffer[Int]()
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
   lazy val topN = ArrayBuffer.empty[Array[Int]]
-  val probN = new ArrayBuffer[Double]()
-  var agenda = new mutable.PriorityQueue[QueueElement]() (
+  lazy val probN = ArrayBuffer.empty[Double]
+  lazy val agenda = mutable.PriorityQueue.empty[QueueElement] (
     Ordering.by((_:QueueElement).fx).reverse
   )
 

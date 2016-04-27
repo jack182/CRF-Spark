@@ -132,7 +132,6 @@ case class CRFModel (
     if(nBest > 1)
       Seq.setCandidates(tagger.topN, tagger.probN, deFeatureIdx.labels )
 
-    println(Seq.nBestPrint())
     Seq
   }
 }
