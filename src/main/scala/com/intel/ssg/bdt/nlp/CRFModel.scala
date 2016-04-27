@@ -38,11 +38,11 @@ case class CRFModel (
 
   private var verboseMode: Option[VerboseMode] = None
 
-  private var nBest: Int = 0
-  private var costFactor: Double = 1.0
+  private var nBest =  0
+  private var costFactor = 1.0
 
-  def setNBest(k: Int): CRFModel = {
-    this.nBest = k
+  def setNBest(nBest: Int): CRFModel = {
+    this.nBest = nBest
     this
   }
 
@@ -126,12 +126,13 @@ case class CRFModel (
     }
     else {
       Seq = Sequence(test.toArray.map(x =>
-              Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
+        Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
       ))
     }
-    if(nBest>1)
-      Seq.setCandidates(tagger.topN).setProbN(tagger.probN).setLabels(deFeatureIdx.labels)
+    if(nBest > 1)
+      Seq.setCandidates(tagger.topN, tagger.probN, deFeatureIdx.labels )
 
+    println(Seq.nBestPrint())
     Seq
   }
 }

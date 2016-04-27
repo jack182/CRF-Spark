@@ -22,23 +22,18 @@ import scala.collection.mutable.ArrayBuffer
 
 import breeze.linalg.{DenseVector => BDV, Vector => BV}
 
-import breeze.numerics.pow
-
 private[nlp] trait Mode
 
 private[nlp] case object LearnMode extends Mode
 
 private[nlp] case object TestMode extends Mode
 
-private [nlp] case class QueueElement(
+private[nlp] case class QueueElement(
   node : Node,
   fx : Double,
   gx : Double,
   next : QueueElement )
   extends Serializable {
-  //    def compare(other: QueueElement): Boolean = {
-  //    return this.fx > other.fx
-//}
 }
 
 private[nlp] class Tagger (
@@ -53,11 +48,12 @@ private[nlp] class Tagger (
   val nodes  = new ArrayBuffer[Node]()
   val answer = new ArrayBuffer[Int]()
   val result = new ArrayBuffer[Int]()
+  val topNResult = new ArrayBuffer[Int]()
   val featureCache = new ArrayBuffer[Int]()
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
-  val topN = new ArrayBuffer[ArrayBuffer[Int]]()
+  lazy val topN = ArrayBuffer.empty[Array[Int]]
   val probN = new ArrayBuffer[Double]()
   var agenda = new mutable.PriorityQueue[QueueElement]() (
     Ordering.by((_:QueueElement).fx).reverse
@@ -68,10 +64,11 @@ private[nlp] class Tagger (
     this
   }
 
-  def setNBest(k: Int) = {
-    this.nBest = k
+  def setNBest(nBest: Int) = {
+    this.nBest = nBest
     this
   }
+
   def read(lines: Sequence, feature_idx: FeatureIndex): Unit = {
     lines.toArray.foreach{ t =>
       mode match {
@@ -160,7 +157,7 @@ private[nlp] class Tagger (
       nd = nd.prev
     }
 
-    cost = - nodes((x.length - 1)*ySize + result.last).bestCost   // (TODO: cost will be used for nbest)
+    cost = - nodes((x.length - 1)*ySize + result.last).bestCost
   }
 
   def gradient(expected: BV[Double], alpha: BDV[Double]): Double = {
@@ -229,7 +226,7 @@ private[nlp] class Tagger (
     }
     else
       viterbi()
-    if(nBest >= 1) {
+    if(nBest > 1) {
       initNbest()
       findNBest()
     }
@@ -280,7 +277,7 @@ private[nlp] class Tagger (
     var fx = 0.0
     var gx = 0.0
     val next: QueueElement = null
-    if(!agenda.isEmpty)
+    if(agenda.nonEmpty)
       agenda.clear()
     for(i <- 0 until ySize) {
       node = this.nodes(k*ySize + i)
@@ -288,46 +285,41 @@ private[nlp] class Tagger (
       gx = -node.cost
       agenda += QueueElement(node, fx, gx, next)
     }
-    return true
+    true
   }
+
   def next(): Boolean = {
     var top: QueueElement = null
     var rnode: Node = null
-    while(! agenda.isEmpty) {
-//      top = agenda.head
-//      agenda = agenda.tail
+    while(agenda.nonEmpty) {
       top = agenda.dequeue()
       rnode = top.node
       if(rnode.x == 0) {
         var n: QueueElement = top
-        for(i <- 0 until x.size) {
-          result.append(n.node.y)
+        for(i <- x.indices) {
+          topNResult.append(n.node.y)
           n = n.next
         }
         cost = top.gx
         return true
       }
-      var gx = 0.0
-      var fx: Double = 0.0
       rnode.lPath.foreach { p =>
-        gx = -nodes(p.lNode).cost - p.cost + top.gx
-        fx = - nodes(p.lNode).bestCost - p.cost + top.gx
+        val gx = -nodes(p.lNode).cost - p.cost + top.gx
+        val fx = - nodes(p.lNode).bestCost - p.cost + top.gx
         agenda  += QueueElement(nodes(p.lNode), fx, gx, top)
       }
     }
-    return false
+    false
   }
+
   def findNBest(){
-       for(i <- 0 until this.nBest) {
-      result.clear()
+    for(i <- 0 until this.nBest) {
+      topNResult.clear()
       if(! next())
         return
-      val tmp = new ArrayBuffer[Int]()
-      tmp ++= result
-      this.probN.append(Math.exp(-cost - Z))
-      this.topN.append(tmp)
+      probN.append(Math.exp(-cost - Z))
+      topN.append(topNResult.toArray)
     }
-
   }
 
 }

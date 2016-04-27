@@ -58,7 +58,7 @@ object CRFFromParsedFile {
     /**
       * still use the model in memory to predict
       */
-    val results = model.setNBest(10)
+    val results: RDD[Sequence] = model.setNBest(10)
       .setVerboseMode(VerboseLevel1)
       .predict(testRDD)
 
