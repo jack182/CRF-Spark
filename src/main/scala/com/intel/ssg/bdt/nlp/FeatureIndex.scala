@@ -25,7 +25,7 @@ import breeze.linalg.{DenseVector => BDV}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.broadcast.Broadcast
 
-private[nlp] class FeatureIndex extends Serializable {
+private[nlp] class  FeatureIndex extends Serializable {
 
   var maxID = 0
   var alpha :BDV[Double] = _

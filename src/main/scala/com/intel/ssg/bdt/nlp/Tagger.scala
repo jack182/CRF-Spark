@@ -32,8 +32,7 @@ private[nlp] case class QueueElement(
   node : Node,
   fx : Double,
   gx : Double,
-  next : QueueElement )
-  extends Serializable {
+  next : QueueElement ) extends Serializable {
 }
 
 private[nlp] class Tagger (
@@ -226,7 +225,7 @@ private[nlp] class Tagger (
     }
     else
       viterbi()
-    if(nBest > 1) {
+    if(nBest >= 1) {
       initNbest()
       findNBest()
     }
@@ -271,21 +270,11 @@ private[nlp] class Tagger (
     p
   }
 
-  def initNbest(): Boolean = {
-    val k = x.size - 1
-    var node: Node = null
-    var fx = 0.0
-    var gx = 0.0
-    val next: QueueElement = null
+  def initNbest(): Unit = {
     if(agenda.nonEmpty)
       agenda.clear()
-    for(i <- 0 until ySize) {
-      node = this.nodes(k*ySize + i)
-      fx = -node.bestCost
-      gx = -node.cost
-      agenda += QueueElement(node, fx, gx, next)
-    }
-    true
+    nodes.slice((x.size - 1) * ySize, x.size * ySize - 1).foreach(
+      n => agenda += QueueElement(n, - n.bestCost, - n.cost, null))
   }
 
   def next(): Boolean = {
@@ -315,9 +304,9 @@ private[nlp] class Tagger (
   def findNBest(){
     for(i <- 0 until this.nBest) {
       topNResult.clear()
-      if(! next())
+      if(!next())
         return
-      probN.append(Math.exp(-cost - Z))
+      probN.append(Math.exp(- cost - Z))
       topN.append(topNResult.toArray)
     }
   }
