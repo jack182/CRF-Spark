@@ -161,7 +161,7 @@ object Sequence {
     tokens.head(0) match {
       case '#' => val seqProb = tokens.head.tail.toDouble
         Sequence(tokens.tail.map(Token.deSerializer)).setSeqProb(seqProb)
-      case _ => Sequence(tokens.tail.map(Token.deSerializer))
+      case _ => Sequence(tokens.map(Token.deSerializer))
     }
   }
   def serializer(sequence: Sequence): String = {
