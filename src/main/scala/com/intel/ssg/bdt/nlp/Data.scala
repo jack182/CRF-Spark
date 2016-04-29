@@ -149,7 +149,7 @@ case class Sequence (sequence: Array[Token]) extends Serializable {
   def probPrinter(): String = {
     val strRes = new ArrayBuffer[String]()
     strRes.append("|-#-|" + seqProb.toString)
-    strRes ++= this.toArray.map(_.probPrinter)
+    strRes ++= this.toArray.map(_.probPrinter())
     strRes.mkString("\n")
   }
 
@@ -159,7 +159,7 @@ object Sequence {
   def deSerializer(s: String): Sequence = {
     val tokens = s.split("\t")
     tokens.head.substring(0, 5) match {
-      case "|-#-|" => val seqProb = tokens.head.substring(5).toDouble
+      case """"\|-#-\|"""" => val seqProb = tokens.head.substring(5).toDouble
         Sequence(tokens.tail.map(Token.deSerializer)).setSeqProb(seqProb)
       case _ => Sequence(tokens.map(Token.deSerializer))
     }

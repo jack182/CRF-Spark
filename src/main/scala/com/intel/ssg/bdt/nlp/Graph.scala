@@ -28,7 +28,7 @@ private[nlp] class Node extends Serializable {
   var beta = 0.0
   var cost = 0.0
   var bestCost = 0.0
-  var prev: Node = _
+  var prev: Option[Node] = None
   var fVector = 0
   val lPath = new ArrayBuffer[Path]()
   val rPath = new ArrayBuffer[Path]()
