@@ -28,12 +28,7 @@ private[nlp] case object LearnMode extends Mode
 
 private[nlp] case object TestMode extends Mode
 
-private[nlp] case class QueueElement(
-  node : Node,
-  fx : Double,
-  gx : Double,
-  next : QueueElement ) extends Serializable {
-}
+private[nlp] case class QueueElement(node : Node, fx : Double, gx : Double, next : QueueElement)
 
 private[nlp] class Tagger (
     ySize: Int,
@@ -47,12 +42,12 @@ private[nlp] class Tagger (
   val nodes  = new ArrayBuffer[Node]()
   val answer = new ArrayBuffer[Int]()
   val result = new ArrayBuffer[Int]()
-  lazy val topNResult = ArrayBuffer.empty[Int]
   val featureCache = new ArrayBuffer[Int]()
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
   lazy val topN = ArrayBuffer.empty[Array[Int]]
+  lazy val topNResult = ArrayBuffer.empty[Int]
   lazy val probN = ArrayBuffer.empty[Double]
   lazy val agenda = mutable.PriorityQueue.empty[QueueElement] (
     Ordering.by((_:QueueElement).fx).reverse
@@ -96,7 +91,7 @@ private[nlp] class Tagger (
       n.fVector = featureCacheIndex(n.x)
     }
 
-    nodes.filter(_.x > 0).foreach { n =>
+    nodes.filter(_.x > 0).foreach{ n =>
       val paths = Array.fill(ySize)(new Path)
       paths.zipWithIndex.foreach { case(p, indexP) =>
         p.fVector = featureCacheIndex(n.x + x.length - 1)
@@ -119,41 +114,33 @@ private[nlp] class Tagger (
    * Get the max expectation in the nodes and predicts the most likely label
    */
   def viterbi(): Unit = {
-    var bestCost: Double = -1e37
-    var best: Node = null
+    var bestCost = Double.MinValue
+    var best: Option[Node] = None
 
     nodes.foreach { n =>
-      bestCost = -1E37
-      best = null
+      bestCost = Double.MinValue
+      best = None
       n.lPath.foreach { p =>
         val cost = nodes(p.lNode).bestCost + p.cost + n.cost
         if (cost > bestCost) {
           bestCost = cost
-          best = nodes(p.lNode)
+          best = Some(nodes(p.lNode))
         }
       }
       n.prev = best
       best match {
-        case null =>
+        case None =>
           n.bestCost = n.cost
         case _ =>
           n.bestCost = bestCost
       }
     }
 
-    bestCost = -1E37
+    var nd: Option[Node] = Some(nodes.filter(_.x == x.length - 1).max(Ordering.by((_:Node).bestCost)))
 
-    nodes.filter(_.x == x.length - 1).foreach { n =>
-      if( n.bestCost > bestCost) {
-        best = n
-        bestCost = n.bestCost
-      }
-    }
-
-    var nd = best
-    while (nd != null) {
-      result.update(nd.x, nd.y)
-      nd = nd.prev
+    while (nd.isDefined) {
+      result.update(nd.get.x, nd.get.y)
+      nd = nd.get.prev
     }
 
     cost = - nodes((x.length - 1)*ySize + result.last).bestCost
@@ -203,31 +190,40 @@ private[nlp] class Tagger (
       idx = n.x * ySize + n.y
       probMatrix(idx) = Math.exp(n.alpha + n.beta - n.cost - Z)
     }
-    this.seqProb = Math.exp(-cost -Z )
+    this.seqProb = Math.exp(- cost - Z)
 
   }
+
   def clear(): Unit = {
-    nodes.foreach(clear)
+    nodes foreach{ n =>
+      n.lPath.clear()
+      n.rPath.clear()
+    }
     nodes.clear()
-  }
-
-  def clear(node: Node): Unit = {
-    node.lPath.clear()
-    node.rPath.clear()
   }
 
   def parse(alpha: BDV[Double], mode: Option[VerboseMode]): Unit = {
     buildLattice(alpha)
-    if (nBest != 0 || mode.isDefined) {
+    if (nBest > 0 || mode.isDefined) {
       forwardBackward()
       viterbi()
       probCalculate()
     }
     else
       viterbi()
-    if(nBest >= 1) {
-      initNbest()
-      findNBest()
+    if(nBest > 0) {
+      //initialize nBest
+      if(agenda.nonEmpty) agenda.clear()
+      nodes.slice((x.size - 1) * ySize, x.size * ySize - 1)
+        .foreach(n => agenda += QueueElement(n, - n.bestCost, - n.cost, null))
+      //find nBest
+      for(i <- 0 until this.nBest) {
+        topNResult.clear()
+        if(!nextNode)
+          return
+        probN.append(Math.exp(- cost - Z))
+        topN.append(topNResult.toArray)
+      }
     }
   }
 
@@ -270,20 +266,13 @@ private[nlp] class Tagger (
     p
   }
 
-  def initNbest(): Unit = {
-    if(agenda.nonEmpty)
-      agenda.clear()
-    nodes.slice((x.size - 1) * ySize, x.size * ySize - 1).foreach(
-      n => agenda += QueueElement(n, - n.bestCost, - n.cost, null))
-  }
-
-  def next(): Boolean = {
+  def nextNode: Boolean = {
     var top: QueueElement = null
-    var rnode: Node = null
+    var rNode: Node = null
     while(agenda.nonEmpty) {
       top = agenda.dequeue()
-      rnode = top.node
-      if(rnode.x == 0) {
+      rNode = top.node
+      if(rNode.x == 0) {
         var n: QueueElement = top
         for(i <- x.indices) {
           topNResult.append(n.node.y)
@@ -292,7 +281,7 @@ private[nlp] class Tagger (
         cost = top.gx
         return true
       }
-      rnode.lPath.foreach { p =>
+      rNode.lPath.foreach { p =>
         val gx = -nodes(p.lNode).cost - p.cost + top.gx
         val fx = - nodes(p.lNode).bestCost - p.cost + top.gx
         agenda  += QueueElement(nodes(p.lNode), fx, gx, top)
@@ -300,15 +289,4 @@ private[nlp] class Tagger (
     }
     false
   }
-
-  def findNBest(){
-    for(i <- 0 until this.nBest) {
-      topNResult.clear()
-      if(!next())
-        return
-      probN.append(Math.exp(- cost - Z))
-      topN.append(topNResult.toArray)
-    }
-  }
-
 }

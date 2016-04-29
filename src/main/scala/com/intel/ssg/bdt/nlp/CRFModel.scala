@@ -129,7 +129,7 @@ case class CRFModel (
         Token.put(deFeatureIdx.labels(tagger.result(test.toArray.indexOf(x))), x.tags)
       ))
     }
-    if(nBest >= 1)
+    if(nBest > 0)
       Seq.setCandidates(tagger.topN, tagger.probN, deFeatureIdx.labels )
 
     Seq
