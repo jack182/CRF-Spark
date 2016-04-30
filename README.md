@@ -16,6 +16,9 @@ This documentation is for Spark 1.4+. Other version will probably work yet not t
 * Linear-chain (first-order Markov) CRF
 * Test can run both in parallel and in serial
 
+## Applications
+[A web-based application](https://github.com/gkq/Web-CRF) of this package to Chinese POS Tagging.
+
 ## Example
 
 ### Scala API
