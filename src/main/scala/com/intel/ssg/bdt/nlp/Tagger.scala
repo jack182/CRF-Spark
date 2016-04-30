@@ -17,17 +17,18 @@
 
 package com.intel.ssg.bdt.nlp
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import breeze.linalg.{DenseVector => BDV, Vector => BV}
-
-import breeze.numerics.pow
 
 private[nlp] trait Mode
 
 private[nlp] case object LearnMode extends Mode
 
 private[nlp] case object TestMode extends Mode
+
+private[nlp] case class QueueElement(node : Node, fx : Double, gx : Double, next : QueueElement)
 
 private[nlp] class Tagger (
     ySize: Int,
@@ -45,9 +46,20 @@ private[nlp] class Tagger (
   val featureCacheIndex = new ArrayBuffer[Int]()
   val probMatrix = new ArrayBuffer[Double]()
   var seqProb = 0.0
+  lazy val topN = ArrayBuffer.empty[Array[Int]]
+  lazy val topNResult = ArrayBuffer.empty[Int]
+  lazy val probN = ArrayBuffer.empty[Double]
+  lazy val agenda = mutable.PriorityQueue.empty[QueueElement] (
+    Ordering.by((_:QueueElement).fx).reverse
+  )
 
   def setCostFactor(costFactor: Double) = {
     this.costFactor = costFactor
+    this
+  }
+
+  def setNBest(nBest: Int) = {
+    this.nBest = nBest
     this
   }
 
@@ -79,7 +91,7 @@ private[nlp] class Tagger (
       n.fVector = featureCacheIndex(n.x)
     }
 
-    nodes.filter(_.x > 0).foreach { n =>
+    nodes.filter(_.x > 0).foreach{ n =>
       val paths = Array.fill(ySize)(new Path)
       paths.zipWithIndex.foreach { case(p, indexP) =>
         p.fVector = featureCacheIndex(n.x + x.length - 1)
@@ -102,44 +114,36 @@ private[nlp] class Tagger (
    * Get the max expectation in the nodes and predicts the most likely label
    */
   def viterbi(): Unit = {
-    var bestCost: Double = -1e37
-    var best: Node = null
+    var bestCost = Double.MinValue
+    var best: Option[Node] = None
 
     nodes.foreach { n =>
-      bestCost = -1E37
-      best = null
+      bestCost = Double.MinValue
+      best = None
       n.lPath.foreach { p =>
         val cost = nodes(p.lNode).bestCost + p.cost + n.cost
         if (cost > bestCost) {
           bestCost = cost
-          best = nodes(p.lNode)
+          best = Some(nodes(p.lNode))
         }
       }
       n.prev = best
       best match {
-        case null =>
+        case None =>
           n.bestCost = n.cost
         case _ =>
           n.bestCost = bestCost
       }
     }
 
-    bestCost = -1E37
+    var nd: Option[Node] = Some(nodes.filter(_.x == x.length - 1).max(Ordering.by((_:Node).bestCost)))
 
-    nodes.filter(_.x == x.length - 1).foreach { n =>
-      if( n.bestCost > bestCost) {
-        best = n
-        bestCost = n.bestCost
-      }
+    while (nd.isDefined) {
+      result.update(nd.get.x, nd.get.y)
+      nd = nd.get.prev
     }
 
-    var nd = best
-    while (nd != null) {
-      result.update(nd.x, nd.y)
-      nd = nd.prev
-    }
-
-    cost = - nodes((x.length - 1)*ySize + result.last).bestCost   // (TODO: cost will be used for nbest)
+    cost = - nodes((x.length - 1)*ySize + result.last).bestCost
   }
 
   def gradient(expected: BV[Double], alpha: BDV[Double]): Double = {
@@ -186,28 +190,41 @@ private[nlp] class Tagger (
       idx = n.x * ySize + n.y
       probMatrix(idx) = Math.exp(n.alpha + n.beta - n.cost - Z)
     }
-    this.seqProb = Math.exp(-cost -Z )
+    this.seqProb = Math.exp(- cost - Z)
 
   }
+
   def clear(): Unit = {
-    nodes.foreach(clear)
+    nodes foreach{ n =>
+      n.lPath.clear()
+      n.rPath.clear()
+    }
     nodes.clear()
-  }
-
-  def clear(node: Node): Unit = {
-    node.lPath.clear()
-    node.rPath.clear()
   }
 
   def parse(alpha: BDV[Double], mode: Option[VerboseMode]): Unit = {
     buildLattice(alpha)
-    if (nBest != 0 || mode.isDefined) {
+    if (nBest > 0 || mode.isDefined) {
       forwardBackward()
       viterbi()
       probCalculate()
-    }   // (TODO: add nBest support)
+    }
     else
       viterbi()
+    if(nBest > 0) {
+      //initialize nBest
+      if(agenda.nonEmpty) agenda.clear()
+      nodes.slice((x.size - 1) * ySize, x.size * ySize - 1)
+        .foreach(n => agenda += QueueElement(n, - n.bestCost, - n.cost, null))
+      //find nBest
+      for(i <- 0 until this.nBest) {
+        topNResult.clear()
+        if(!nextNode)
+          return
+        probN.append(Math.exp(- cost - Z))
+        topN.append(topNResult.toArray)
+      }
+    }
   }
 
   def buildLattice(alpha: BDV[Double]): Unit = {
@@ -247,5 +264,29 @@ private[nlp] class Tagger (
     }
 
     p
+  }
+
+  def nextNode: Boolean = {
+    var top: QueueElement = null
+    var rNode: Node = null
+    while(agenda.nonEmpty) {
+      top = agenda.dequeue()
+      rNode = top.node
+      if(rNode.x == 0) {
+        var n: QueueElement = top
+        for(i <- x.indices) {
+          topNResult.append(n.node.y)
+          n = n.next
+        }
+        cost = top.gx
+        return true
+      }
+      rNode.lPath.foreach { p =>
+        val gx = -nodes(p.lNode).cost - p.cost + top.gx
+        val fx = - nodes(p.lNode).bestCost - p.cost + top.gx
+        agenda  += QueueElement(nodes(p.lNode), fx, gx, top)
+      }
+    }
+    false
   }
 }
