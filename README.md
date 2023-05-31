@@ -1,4 +1,4 @@
-# CRF-Spark
+# CRF-Spark-update
 A Spark-based implementation of Conditional Random Fields (CRFs) for segmenting/labeling sequential data.
 
 ## Requirements
