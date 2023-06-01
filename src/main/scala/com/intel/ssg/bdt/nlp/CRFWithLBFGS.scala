@@ -4,7 +4,7 @@ import scala.collection.mutable
 import breeze.optimize.{CachedDiffFunction, DiffFunction, OWLQN => BreezeOWLQN, LBFGS => BreezeLBFGS}
 import breeze.linalg.{DenseVector => BDV, sum => Bsum}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.mllib.optimization._
 import org.apache.spark.mllib.linalg.{Vector => SparkVector}
 
@@ -130,8 +130,8 @@ class L2Updater extends UpdaterCRF {
       weightsOld: BDV[Double],
       gradient: BDV[Double],
       regParam: Double): (BDV[Double], Double) = {
-    val loss = Bsum(weightsOld :* weightsOld :* regParam)
-    gradient :+= weightsOld :* (regParam * 2.0)
+    val loss = Bsum(weightsOld *:* weightsOld *:* regParam)
+    gradient :+= weightsOld *:* (regParam * 2.0)
     (gradient, loss)
   }
 }
