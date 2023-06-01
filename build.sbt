@@ -2,11 +2,11 @@ name := "crf-spark"
 
 version := "0.1.0"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.12.10"
 
 spName := "hqzizania/crf-spark"
 
-sparkVersion := "1.4.0"
+sparkVersion := "3.1.1"
 
 sparkComponents += "mllib"
 
