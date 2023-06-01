@@ -19,7 +19,7 @@ package com.intel.ssg.bdt.nlp
 
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.Logging
+import org.apache.spark.internal.Logging
 
 trait Regularization
 
